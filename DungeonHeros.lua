@@ -1594,7 +1594,7 @@ task.spawn(function()
             if mobs then
                 -- Get the expected mini-boss name for current dungeon
                 local currentDungeonCode = normalDungeonNameMap[normalDungeonName] or normalDungeonName
-                local expectedMiniBoss = getMiniBossNameForDungeon({name = currentDungeonCode})
+                local expectedMiniBoss = getMiniBossNameForDungeon(currentDungeonCode)
                 
                 if expectedMiniBoss then
                     currentMiniBossName = expectedMiniBoss
@@ -1787,16 +1787,6 @@ local function setupUI()
     })
     autoResetOnMiniBossToggleUI:SetValue(config.autoResetOnMiniBoss)
 
-    local miniBossRoomNumberInputUI = NormalDungeonBox:AddInput("MiniBossRoomNumber", {
-        Text = "Fallback Mini-Boss Room", Default = tostring(config.miniBossRoomNumber), Placeholder = "e.g., 6",
-        Tooltip = "Fallback room number for mini-boss detection if no specific mini-boss name is hardcoded for the dungeon. Default is 6.",
-        Callback = function(Value)
-            local num = tonumber(Value)
-            if num and num > 0 then miniBossRoomNumber = num; config.miniBossRoomNumber = num; saveConfig(); print("Fallback Mini-Boss Room Number set to: " .. num)
-            else print("Invalid input for Fallback Mini-Boss Room Number. Please enter a valid number.") end
-        end
-    })
-    miniBossRoomNumberInputUI:SetValue(tostring(config.miniBossRoomNumber))
 
     local normalDungeonNameDropdownUI = NormalDungeonBox:AddDropdown("NormalDungeonName", {
         Text = "Dungeon Name", Values = {"Shattered Forest lvl 1+", "Orion's Peak lvl 15+", "Deadman's Cove lvl 30+", "Flaming Depths lvl 45+", "Mosscrown Jungle lvl 60+", "Astral Abyss lvl 75+", "Shifting Sands lvl 90+", "Shimmering Caves lvl 105+", "Mushroom Forest lvl 120+", "Golden Realm lvl 135+"},

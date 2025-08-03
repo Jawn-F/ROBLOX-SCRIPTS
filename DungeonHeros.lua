@@ -1579,6 +1579,28 @@ local AldrazirStatusLabel = nil -- New global label for debug output
 local aldrazirFound = false
 local aldrazirIsAlive = false
 
+-- Update Aldrazir status for debug display
+task.spawn(function()
+    while true do
+        if autoResetOnMiniBoss then
+            local mobs = workspace:FindFirstChild("Mobs")
+            if mobs then
+                local aldrazir = mobs:FindFirstChild("Aldrazir")
+                aldrazirFound = aldrazir ~= nil
+                if aldrazir then
+                    aldrazirIsAlive = isTargetMobAlive("Aldrazir", true)
+                else
+                    aldrazirIsAlive = false
+                end
+            else
+                aldrazirFound = false
+                aldrazirIsAlive = false
+            end
+        end
+        task.wait(1)
+    end
+end)
+
 -- A loop to update the debug label on screen
 task.spawn(function()
     while true do

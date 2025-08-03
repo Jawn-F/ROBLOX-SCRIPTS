@@ -1582,20 +1582,34 @@ local aldrazirIsAlive = false
 -- Update Aldrazir status for debug display
 task.spawn(function()
     while true do
-        if autoResetOnMiniBoss then
-            local mobs = workspace:FindFirstChild("Mobs")
-            if mobs then
-                local aldrazir = mobs:FindFirstChild("Aldrazir")
-                aldrazirFound = aldrazir ~= nil
-                if aldrazir then
-                    aldrazirIsAlive = isTargetMobAlive("Aldrazir", true)
-                else
-                    aldrazirIsAlive = false
+        -- Always check for Aldrazir, not just when autoResetOnMiniBoss is enabled
+        local mobs = workspace:FindFirstChild("Mobs")
+        if mobs then
+            local aldrazir = mobs:FindFirstChild("Aldrazir")
+            aldrazirFound = aldrazir ~= nil
+            if aldrazir then
+                aldrazirIsAlive = isTargetMobAlive("Aldrazir", true)
+                -- Debug print when Aldrazir is found
+                if not aldrazirFound or aldrazirIsAlive ~= aldrazirFound then
+                    print("[DEBUG] Aldrazir found:", aldrazirFound, "alive:", aldrazirIsAlive)
                 end
             else
-                aldrazirFound = false
                 aldrazirIsAlive = false
             end
+            
+            -- Debug: Print all mobs in the Mobs folder
+            if aldrazirFound == false then
+                local mobNames = {}
+                for _, mob in ipairs(mobs:GetChildren()) do
+                    table.insert(mobNames, mob.Name)
+                end
+                if #mobNames > 0 then
+                    print("[DEBUG] Current mobs in workspace.Mobs:", table.concat(mobNames, ", "))
+                end
+            end
+        else
+            aldrazirFound = false
+            aldrazirIsAlive = false
         end
         task.wait(1)
     end

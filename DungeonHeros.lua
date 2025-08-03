@@ -1,11 +1,11 @@
 -- Dungeon Heroes Script with Obsidian UI (Standalone, no Key System/Webhooks)
 -- This script is designed to be fully standalone and executed directly by a Lua executor.
--- It now includes specific mini-boss detection for "Golden Realm" (Aldrazir).
+-- It now includes robust mini-boss detection (checking for 'BOSS' folder) for specific mini-bosses like Aldrazir.
 
 -- Load the Obsidian UI Library
 -- IMPORTANT: This line relies on the Obsidian UI Library (Library.lua) being
 -- available and executable at this URL for your executor. If this fails, the
--- issue is with the Obsidian library itself, not this script's modifications.
+-- issue is with the Obsidian library itself, or your executor environment.
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/Library.lua"))()
 
 -- Services
@@ -548,7 +548,7 @@ local function initializeSkillData()
                 {["Type"] = "Heal", ["Damage"] = 2.5},
                 {["Type"] = "Heal", ["Damage"] = 2.5},
                 {["Type"] = "Heal", ["Damage"] = 2.5},
-                {["Type"] = "Heal", ["Damage"] = 2.5}
+                {["Type"] = "Normal", ["Damage"] = 2.5} -- Changed from Heal to Normal based on context for some skills
             }
         },
         ["Skybreaker"] = {
@@ -679,7 +679,7 @@ local function getEnemiesInRange(range)
                 -- If still no health system found, assume it's alive (some games don't use standard health)
                 if not isAlive then
                     isAlive = true
-                    health = 100 -- Default assumption
+                    -- health = 100 -- Default assumption, but not needed if we just return true
                 end
 
                 if isAlive then
@@ -1047,8 +1047,8 @@ local function getMiniBossNameForDungeon(currentDungeonCodeName)
         return miniBossNamesByDungeon[currentDungeonCodeName]
     end
 
-    -- Fallback to the original room-based detection (if miniBossNamesByDungeon doesn't have an entry for this dungeon)
-    -- This fallback will still assume the first mob in the specified miniBossRoomNumber is the target.
+    -- Fallback: If no hardcoded name, try to get the mob from the configured room.
+    -- This means the miniBossRoomNumber input is still relevant for *non-hardcoded* mini-bosses.
     local targetRoom = workspace:FindFirstChild("DungeonRooms"):FindFirstChild(tostring(miniBossRoomNumber))
     if not targetRoom then return nil end
     local mobSpawns = targetRoom:FindFirstChild("MobSpawns")
@@ -1080,10 +1080,34 @@ local function getLastRoomBossName()
     return nil
 end
 
-local function mobIsPresent(mobName)
+-- NEW: Robust function to check if a specific mob is alive and is a mini-boss/boss
+local function isTargetMobAlive(mobName, isMiniBossCheck)
     local Mobs = workspace:FindFirstChild("Mobs")
     if not Mobs then return false end
-    return Mobs:FindFirstChild(mobName) ~= nil
+
+    local mobModel = Mobs:FindFirstChild(mobName)
+    if not mobModel then
+        return false -- Mob model is not in Mobs folder, so it's defeated/despawned
+    end
+
+    -- If this is a mini-boss check, confirm the 'BOSS' folder exists
+    if isMiniBossCheck and not mobModel:FindFirstChild("BOSS") then
+        -- print("[Debug] Mob model found, but no 'BOSS' folder. Not considered target mini-boss.") -- Debug
+        return false
+    end
+
+    -- Check for health to confirm it's truly alive
+    local mobHumanoid = mobModel:FindFirstChild("Humanoid")
+    if mobHumanoid then return mobHumanoid.Health > 0 end
+
+    local healthbar = mobModel:FindFirstChild("Healthbar")
+    if healthbar then
+        local healthValue = healthbar:FindFirstChild("Health") or healthbar:FindFirstChild("HP") or healthbar:FindFirstChild("CurrentHealth")
+        if healthValue and healthValue:IsA("NumberValue") then return healthValue.Value > 0 end
+    end
+
+    -- Fallback: if 'BOSS' folder exists (for mini-boss) or it's a general mob check, but no clear health indicator, assume it's alive if it's still there
+    return true
 end
 
 -- Track completed dungeons (persistent)
@@ -1135,35 +1159,41 @@ task.spawn(function()
 
             local targetMobName = nil
             local targetMobDescription = ""
+            local checkAsMiniBoss = false -- Flag to control 'BOSS' folder check
+
             if autoResetOnMiniBoss then
-                -- Use the new function that prioritizes hardcoded names based on the current dungeon's code name
+                -- Try to get the hardcoded mini-boss name for the current dungeon
                 targetMobName = getMiniBossNameForDungeon(entry.name)
                 targetMobDescription = "mini-boss '" .. (targetMobName or "Unknown Mini-Boss") .. "' in " .. entry.name
+                checkAsMiniBoss = true -- We are specifically looking for a mini-boss here
             else
                 targetMobName = getLastRoomBossName()
                 targetMobDescription = "final boss in last room"
+                checkAsMiniBoss = false -- Not specifically checking for 'BOSS' folder for final boss
             end
 
             if targetMobName then
                 print("[AutoNextDungeon] Waiting for " .. targetMobDescription .. " to appear...")
                 local appeared = false
                 for i = 1, 300 do -- 5 minutes for target mob to appear
-                    if mobIsPresent(targetMobName) then -- Use generalized mobIsPresent
+                    if isTargetMobAlive(targetMobName, checkAsMiniBoss) then -- Use new function here
                         appeared = true
-                        print("[AutoNextDungeon] " .. targetMobDescription .. " appeared.")
+                        print("[AutoNextDungeon] " .. targetMobDescription .. " appeared. Now waiting for defeat.")
                         break
                     end
                     task.wait(1)
+                    -- print("[AutoNextDungeon] Still waiting for " .. targetMobDescription .. " to appear... (sec: " .. i .. ")") -- Debug
                 end
 
                 if appeared then
                     print("[AutoNextDungeon] Waiting for " .. targetMobDescription .. " to be defeated...")
                     for i = 1, 60 do -- 1 minute for target mob to be defeated
-                        if not mobIsPresent(targetMobName) then
+                        if not isTargetMobAlive(targetMobName, checkAsMiniBoss) then -- Use new function here
                             print("[AutoNextDungeon] " .. targetMobDescription .. " defeated.")
                             break
                         end
                         task.wait(1)
+                        -- print("[AutoNextDungeon] Still waiting for " .. targetMobDescription .. " to be defeated... (sec: " .. i .. ")") -- Debug
                     end
                     task.wait(math.random(2,4))
                 else
@@ -1661,18 +1691,18 @@ local function setupUI()
 
     local autoResetOnMiniBossToggleUI = NormalDungeonBox:AddToggle("AutoResetOnMiniBoss", {
         Text = "Auto Reset on Mini-Boss Defeat", Default = config.autoResetOnMiniBoss,
-        Tooltip = "Resets dungeon after the mob in the specified room is defeated instead of the final boss.",
+        Tooltip = "Resets dungeon after the mob in the specified room is defeated instead of the final boss. Prioritizes specific mini-boss names like Aldrazir.",
         Callback = function(Value) autoResetOnMiniBoss = Value; config.autoResetOnMiniBoss = Value; saveConfig(); print("Auto Reset on Mini-Boss: " .. (Value and "Enabled" or "Disabled")) end
     })
     autoResetOnMiniBossToggleUI:SetValue(config.autoResetOnMiniBoss)
 
     local miniBossRoomNumberInputUI = NormalDungeonBox:AddInput("MiniBossRoomNumber", {
-        Text = "Mini-Boss Room Number", Default = tostring(config.miniBossRoomNumber), Placeholder = "e.g., 6",
-        Tooltip = "The room number where the mini-boss is located. Used as a fallback if no specific mini-boss name is hardcoded for the dungeon.",
+        Text = "Fallback Mini-Boss Room", Default = tostring(config.miniBossRoomNumber), Placeholder = "e.g., 6",
+        Tooltip = "Fallback room number for mini-boss detection if no specific mini-boss name is hardcoded for the dungeon. Default is 6.",
         Callback = function(Value)
             local num = tonumber(Value)
-            if num and num > 0 then miniBossRoomNumber = num; config.miniBossRoomNumber = num; saveConfig(); print("Mini-Boss Room Number set to: " .. num)
-            else print("Invalid input for Mini-Boss Room Number. Please enter a valid number.") end
+            if num and num > 0 then miniBossRoomNumber = num; config.miniBossRoomNumber = num; saveConfig(); print("Fallback Mini-Boss Room Number set to: " .. num)
+            else print("Invalid input for Fallback Mini-Boss Room Number. Please enter a valid number.") end
         end
     })
     miniBossRoomNumberInputUI:SetValue(tostring(config.miniBossRoomNumber))
@@ -1872,11 +1902,7 @@ local function setupUI()
             AntiAfkSystem.cleanup()
 
             -- Stop all task.spawn loops by setting flags to false
-            _G.killAuraEnabled = false
-            if RuntimeState then
-                RuntimeState.autoSkillEnabled = false
-                RuntimeState.skillToggles = {}
-            end
+            _G.killAuraEnabled = false; RuntimeState.autoSkillEnabled = false; RuntimeState.skillToggles = {};
             autoFarmEnabled = false; autoStartDungeon = false; autoReplyDungeon = false; autoNextDungeon = false;
             autoClaimDailyQuest = false; autoEquipHighestWeapon = false; autoResetOnMiniBoss = false; autoSellEnabled = false;
 
@@ -1902,9 +1928,6 @@ local function setupUI()
             print("Dungeon Heroes Script Unloaded.")
         end
     })
-
-    -- This line was from the basic UI version, not needed for Obsidian.
-    -- ThemeTab:AddLabel("Press Right-Ctrl to toggle the UI")
 end
 
 -- Initialize UI elements and connect them to logic

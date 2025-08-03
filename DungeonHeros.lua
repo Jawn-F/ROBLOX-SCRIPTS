@@ -1593,7 +1593,7 @@ task.spawn(function()
                 local currentlyAlive = isTargetMobAlive("Aldrazir", true)
                 
                 -- Check if Aldrazir just died (was alive, now dead) and auto-reset is enabled
-                if autoResetOnMiniBoss and previousAldrazirAlive and not currentlyAlive and autoNextDungeon then
+                if autoResetOnMiniBoss and previousAldrazirAlive and not currentlyAlive then
                     print("[AUTO-RESET] Aldrazir defeated! Starting next dungeon...")
                     task.wait(math.random(2, 4)) -- Wait a bit like the normal auto-dungeon logic
                     
@@ -1623,12 +1623,18 @@ task.spawn(function()
                 aldrazirIsAlive = currentlyAlive
             else
                 -- If Aldrazir was alive but now the mob is gone, trigger reset
-                if autoResetOnMiniBoss and previousAldrazirAlive and autoNextDungeon then
+                print("[DEBUG] Aldrazir not found. AutoReset:", autoResetOnMiniBoss, "PrevAlive:", previousAldrazirAlive, "AutoNext:", autoNextDungeon)
+                
+                if autoResetOnMiniBoss and previousAldrazirAlive then
                     print("[AUTO-RESET] Aldrazir disappeared (defeated)! Starting next dungeon...")
+                    print("[AUTO-RESET] Current settings - Dungeon:", normalDungeonName, "Difficulty:", normalDungeonDifficulty)
+                    
                     task.wait(math.random(2, 4))
                     
                     local currentDungeonCode = normalDungeonNameMap[normalDungeonName] or normalDungeonName
                     local currentDifficulty = ({Normal=1, Medium=2, Hard=3, Insane=4, Extreme=5})[normalDungeonDifficulty] or 1
+                    
+                    print("[AUTO-RESET] Using dungeon code:", currentDungeonCode, "difficulty:", currentDifficulty)
                     
                     local args = {
                         [1] = currentDungeonCode,
@@ -1644,6 +1650,16 @@ task.spawn(function()
                         print("[AUTO-RESET] Successfully started new dungeon after Aldrazir disappeared")
                     else
                         warn("[AUTO-RESET] Error starting new dungeon:", err)
+                    end
+                    
+                    -- Reset the flag so we don't trigger multiple times
+                    previousAldrazirAlive = false
+                else
+                    if not autoResetOnMiniBoss then
+                        print("[DEBUG] Auto reset on mini-boss is disabled")
+                    end
+                    if not previousAldrazirAlive then
+                        print("[DEBUG] Aldrazir was not previously alive")
                     end
                 end
                 
@@ -2064,10 +2080,14 @@ local function setupUI()
             end
             
             -- Update debug info for Aldrazir specifically
-            local aldrazirText = string.format("Aldrazir Status:\nFound: %s\nAlive: %s\nAuto Reset Enabled: %s", 
+            local aldrazirText = string.format("Aldrazir Status:\nFound: %s\nAlive: %s\nPrevious Alive: %s\nAuto Reset Enabled: %s\nCurrent Dungeon: %s\nDifficulty: %s\nPlayer Limit: %s", 
                 tostring(aldrazirFound), 
                 tostring(aldrazirIsAlive),
-                tostring(autoResetOnMiniBoss))
+                tostring(previousAldrazirAlive),
+                tostring(autoResetOnMiniBoss),
+                tostring(normalDungeonName),
+                tostring(normalDungeonDifficulty),
+                tostring(normalDungeonPlayerLimit))
             
             if mobListLabel then mobListLabel:SetText(mobText) end
             if aldrazirDebugLabel then aldrazirDebugLabel:SetText(aldrazirText) end

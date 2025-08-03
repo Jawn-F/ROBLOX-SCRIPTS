@@ -1,6 +1,6 @@
 -- Dungeon Heroes Script with Obsidian UI (Standalone, no Key System/Webhooks)
 -- This script is designed to be fully standalone and executed directly by a Lua executor.
--- It now includes robust mini-boss detection (checking for 'BOSS' folder) for specific mini-bosses like Aldrazir.
+-- It now includes a debug output on the screen for Aldrazir's detection status.
 
 -- Load the Obsidian UI Library
 -- IMPORTANT: This line relies on the Obsidian UI Library (Library.lua) being
@@ -548,7 +548,7 @@ local function initializeSkillData()
                 {["Type"] = "Heal", ["Damage"] = 2.5},
                 {["Type"] = "Heal", ["Damage"] = 2.5},
                 {["Type"] = "Heal", ["Damage"] = 2.5},
-                {["Type"] = "Normal", ["Damage"] = 2.5} -- Changed from Heal to Normal based on context for some skills
+                {["Type"] = "Heal", ["Damage"] = 2.5}
             }
         },
         ["Skybreaker"] = {
@@ -1092,7 +1092,6 @@ local function isTargetMobAlive(mobName, isMiniBossCheck)
 
     -- If this is a mini-boss check, confirm the 'BOSS' folder exists
     if isMiniBossCheck and not mobModel:FindFirstChild("BOSS") then
-        -- print("[Debug] Mob model found, but no 'BOSS' folder. Not considered target mini-boss.") -- Debug
         return false
     end
 
@@ -1182,7 +1181,6 @@ task.spawn(function()
                         break
                     end
                     task.wait(1)
-                    -- print("[AutoNextDungeon] Still waiting for " .. targetMobDescription .. " to appear... (sec: " .. i .. ")") -- Debug
                 end
 
                 if appeared then
@@ -1193,7 +1191,6 @@ task.spawn(function()
                             break
                         end
                         task.wait(1)
-                        -- print("[AutoNextDungeon] Still waiting for " .. targetMobDescription .. " to be defeated... (sec: " .. i .. ")") -- Debug
                     end
                     task.wait(math.random(2,4))
                 else
@@ -1578,6 +1575,21 @@ local EventDungeonBox = DungeonTab:AddLeftGroupbox("Event Dungeon")
 local SettingsTabbox = SettingsTab:AddLeftTabbox("Settings") -- Obsidian uses Tabbox for nested tabs
 local ThemeTab = SettingsTabbox:AddTab("Theme") -- Tab inside Tabbox
 
+local AldrazirStatusLabel = nil -- New global label for debug output
+local aldrazirFound = false
+local aldrazirIsAlive = false
+
+-- A loop to update the debug label on screen
+task.spawn(function()
+    while true do
+        if AldrazirStatusLabel then
+            local text = string.format("Aldrazir Found: %s\nAlive: %s", tostring(aldrazirFound), tostring(aldrazirIsAlive))
+            AldrazirStatusLabel:SetText(text)
+        end
+        task.wait(0.5)
+    end
+end)
+
 -- Function to set up UI elements and load their states from config
 local function setupUI()
     -- Features Tab
@@ -1706,6 +1718,9 @@ local function setupUI()
         end
     })
     miniBossRoomNumberInputUI:SetValue(tostring(config.miniBossRoomNumber))
+
+    -- New Label for Debug Output
+    AldrazirStatusLabel = NormalDungeonBox:AddLabel("AldrazirStatusLabel", "Aldrazir Found: False\nAlive: False", true)
 
     local normalDungeonNameDropdownUI = NormalDungeonBox:AddDropdown("NormalDungeonName", {
         Text = "Dungeon Name", Values = {"Shattered Forest lvl 1+", "Orion's Peak lvl 15+", "Deadman's Cove lvl 30+", "Flaming Depths lvl 45+", "Mosscrown Jungle lvl 60+", "Astral Abyss lvl 75+", "Shifting Sands lvl 90+", "Shimmering Caves lvl 105+", "Mushroom Forest lvl 120+", "Golden ream lvl 135+"},
@@ -1928,6 +1943,9 @@ local function setupUI()
             print("Dungeon Heroes Script Unloaded.")
         end
     })
+
+    -- This line was from the basic UI version, not needed for Obsidian.
+    -- ThemeTab:AddLabel("Press Right-Ctrl to toggle the UI")
 end
 
 -- Initialize UI elements and connect them to logic

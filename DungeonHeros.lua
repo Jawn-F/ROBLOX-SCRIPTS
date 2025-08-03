@@ -1,6 +1,6 @@
--- Obsidian UI Example Script
--- This script aims to be standalone, without reliance on a key system or external launchers.
--- It still attempts to load the Obsidian UI Library from its original GitHub URL.
+-- Dungeon Heroes Script with Obsidian UI (Standalone, no Key System/Webhooks)
+-- This script is designed to be fully standalone and executed directly by a Lua executor.
+-- It now includes specific mini-boss detection for "Golden Realm" (Aldrazir).
 
 -- Load the Obsidian UI Library
 -- IMPORTANT: This line relies on the Obsidian UI Library (Library.lua) being
@@ -119,7 +119,7 @@ local config = {
     autoSellRarity = "Common",
     -- NEW CONFIG ITEMS
     autoResetOnMiniBoss = false,
-    miniBossRoomNumber = 6, -- Default mini-boss room
+    miniBossRoomNumber = 6, -- Default mini-boss room (used by UI as a general setting, but not for specific mob name)
     uiToggleKey = "RightControl", -- Default key for UI toggle
 }
 
@@ -607,8 +607,6 @@ local function initializeSkillData()
     -- Initialize default selected skills
     RuntimeState.selectedSkills = {"Whirlwind", "FerociousRoar", "Rumble"}
 end
-
--- Initialize skill data
 initializeSkillData()
 
 -- Auto Skill Helper Functions
@@ -1035,24 +1033,36 @@ local function getLastRoom()
     return lastRoom
 end
 
--- NEW FUNCTION: Get mini-boss name from a specific room
-local function getMiniBossNameFromRoom(roomNumber)
-    local targetRoom = workspace:FindFirstChild("DungeonRooms"):FindFirstChild(tostring(roomNumber))
-    if not targetRoom then return nil end
+-- NEW: Hardcoded mini-boss names by dungeon code name (not display name)
+local miniBossNamesByDungeon = {
+    ["GoldDungeon"] = "Aldrazir", -- Golden Realm's mini-boss
+    -- Add other dungeons and their specific mini-boss names here as needed
+    -- E.g., ["ForestDungeon"] = "ForestMiniBossName",
+}
 
+-- MODIFIED FUNCTION: Get mini-boss name for the *current dungeon*
+local function getMiniBossNameForDungeon(currentDungeonCodeName)
+    -- Prioritize hardcoded mini-boss name if available for this dungeon
+    if miniBossNamesByDungeon[currentDungeonCodeName] then
+        return miniBossNamesByDungeon[currentDungeonCodeName]
+    end
+
+    -- Fallback to the original room-based detection (if miniBossNamesByDungeon doesn't have an entry for this dungeon)
+    -- This fallback will still assume the first mob in the specified miniBossRoomNumber is the target.
+    local targetRoom = workspace:FindFirstChild("DungeonRooms"):FindFirstChild(tostring(miniBossRoomNumber))
+    if not targetRoom then return nil end
     local mobSpawns = targetRoom:FindFirstChild("MobSpawns")
     if mobSpawns then
         local spawns = mobSpawns:FindFirstChild("Spawns")
         if spawns then
-            -- Assuming there's only one mob in this specific mini-boss spawn
             for _, mob in ipairs(spawns:GetChildren()) do
-                -- You can add more specific mini-boss checks here if needed (e.g., mob.Name:find("Elite"))
                 return mob.Name
             end
         end
     end
     return nil
 end
+
 
 local function getLastRoomBossName()
     local lastRoom = getLastRoom()
@@ -1070,61 +1080,29 @@ local function getLastRoomBossName()
     return nil
 end
 
-local function bossInMobs(bossName)
+local function mobIsPresent(mobName)
     local Mobs = workspace:FindFirstChild("Mobs")
     if not Mobs then return false end
-    return Mobs:FindFirstChild(bossName) ~= nil
+    return Mobs:FindFirstChild(mobName) ~= nil
 end
 
 -- Track completed dungeons (persistent)
 local completedDungeons = config.completedDungeons or {}
 
 local dungeonSequence = {
-    {name = "ForestDungeon", difficulty = 1}, -- Normal
-    {name = "ForestDungeon", difficulty = 2}, -- Medium
-    {name = "ForestDungeon", difficulty = 3}, -- Hard
-    {name = "ForestDungeon", difficulty = 4}, -- Insane
-    {name = "MountainDungeon", difficulty = 1}, -- Normal
-    {name = "MountainDungeon", difficulty = 2}, -- Medium
-    {name = "MountainDungeon", difficulty = 3}, -- Hard
-    {name = "MountainDungeon", difficulty = 4}, -- Insane
-    {name = "CoveDungeon", difficulty = 1}, -- Normal
-    {name = "CoveDungeon", difficulty = 2}, -- Medium
-    {name = "CoveDungeon", difficulty = 3}, -- Hard
-    {name = "CoveDungeon", difficulty = 4}, -- Insane
-    {name = "CastleDungeon", difficulty = 1}, -- Normal
-    {name = "CastleDungeon", difficulty = 2}, -- Medium
-    {name = "CastleDungeon", difficulty = 3}, -- Hard
-    {name = "CastleDungeon", difficulty = 4}, -- Insane
-    {name = "JungleDungeon", difficulty = 1}, -- Normal
-    {name = "JungleDungeon", difficulty = 2}, -- Medium
-    {name = "JungleDungeon", difficulty = 3}, -- Hard
-    {name = "JungleDungeon", difficulty = 4}, -- Insane
-    {name = "AstralDungeon", difficulty = 1}, -- Normal
-    {name = "AstralDungeon", difficulty = 2}, -- Medium
-    {name = "AstralDungeon", difficulty = 3}, -- Hard
-    {name = "AstralDungeon", difficulty = 4}, -- Insane
-    {name = "DesertDungeon", difficulty = 1}, -- Normal
-    {name = "DesertDungeon", difficulty = 2}, -- Medium
-    {name = "DesertDungeon", difficulty = 3}, -- Hard
-    {name = "DesertDungeon", difficulty = 4}, -- Insane
-    {name = "CaveDungeon", difficulty = 1}, -- Normal
-    {name = "CaveDungeon", difficulty = 2}, -- Medium
-    {name = "CaveDungeon", difficulty = 3}, -- Hard
-    {name = "CaveDungeon", difficulty = 4}, -- Insane
-    {name = "MushroomDungeon", difficulty = 1}, -- Normal
-    {name = "MushroomDungeon", difficulty = 2}, -- Medium
-    {name = "MushroomDungeon", difficulty = 3}, -- Hard
-    {name = "MushroomDungeon", difficulty = 4}, -- Insane
-    {name = "GoldDungeon", difficulty = 1}, -- Normal
-    {name = "GoldDungeon", difficulty = 2}, -- Medium
-    {name = "GoldDungeon", difficulty = 3}, -- Hard
-    {name = "GoldDungeon", difficulty = 4}, -- Insane
+    {name = "ForestDungeon", difficulty = 1}, {name = "ForestDungeon", difficulty = 2}, {name = "ForestDungeon", difficulty = 3}, {name = "ForestDungeon", difficulty = 4},
+    {name = "MountainDungeon", difficulty = 1}, {name = "MountainDungeon", difficulty = 2}, {name = "MountainDungeon", difficulty = 3}, {name = "MountainDungeon", difficulty = 4},
+    {name = "CoveDungeon", difficulty = 1}, {name = "CoveDungeon", difficulty = 2}, {name = "CoveDungeon", difficulty = 3}, {name = "CoveDungeon", difficulty = 4},
+    {name = "CastleDungeon", difficulty = 1}, {name = "CastleDungeon", difficulty = 2}, {name = "CastleDungeon", difficulty = 3}, {name = "CastleDungeon", difficulty = 4},
+    {name = "JungleDungeon", difficulty = 1}, {name = "JungleDungeon", difficulty = 2}, {name = "JungleDungeon", difficulty = 3}, {name = "JungleDungeon", difficulty = 4},
+    {name = "AstralDungeon", difficulty = 1}, {name = "AstralDungeon", difficulty = 2}, {name = "AstralDungeon", difficulty = 3}, {name = "AstralDungeon", difficulty = 4},
+    {name = "DesertDungeon", difficulty = 1}, {name = "DesertDungeon", difficulty = 2}, {name = "DesertDungeon", difficulty = 3}, {name = "DesertDungeon", difficulty = 4},
+    {name = "CaveDungeon", difficulty = 1}, {name = "CaveDungeon", difficulty = 2}, {name = "CaveDungeon", difficulty = 3}, {name = "CaveDungeon", difficulty = 4},
+    {name = "MushroomDungeon", difficulty = 1}, {name = "MushroomDungeon", difficulty = 2}, {name = "MushroomDungeon", difficulty = 3}, {name = "MushroomDungeon", difficulty = 4},
+    {name = "GoldDungeon", difficulty = 1}, {name = "GoldDungeon", difficulty = 2}, {name = "GoldDungeon", difficulty = 3}, {name = "GoldDungeon", difficulty = 4},
 }
 
-local function getDungeonKey(entry)
-    return tostring(entry.name) .. "_" .. tostring(entry.difficulty)
-end
+local function getDungeonKey(entry) return tostring(entry.name) .. "_" .. tostring(entry.difficulty) end
 
 -- MODIFIED AUTO NEXT DUNGEON LOOP
 task.spawn(function()
@@ -1158,20 +1136,21 @@ task.spawn(function()
             local targetMobName = nil
             local targetMobDescription = ""
             if autoResetOnMiniBoss then
-                targetMobName = getMiniBossNameFromRoom(miniBossRoomNumber)
-                targetMobDescription = "mini-boss in Room " .. miniBossRoomNumber
+                -- Use the new function that prioritizes hardcoded names based on the current dungeon's code name
+                targetMobName = getMiniBossNameForDungeon(entry.name)
+                targetMobDescription = "mini-boss '" .. (targetMobName or "Unknown Mini-Boss") .. "' in " .. entry.name
             else
                 targetMobName = getLastRoomBossName()
                 targetMobDescription = "final boss in last room"
             end
 
             if targetMobName then
-                print("[AutoNextDungeon] Waiting for " .. targetMobDescription .. ": " .. targetMobName .. " to appear...")
+                print("[AutoNextDungeon] Waiting for " .. targetMobDescription .. " to appear...")
                 local appeared = false
                 for i = 1, 300 do -- 5 minutes for target mob to appear
-                    if bossInMobs(targetMobName) then -- Reusing bossInMobs as it simply checks for name in Mobs folder
+                    if mobIsPresent(targetMobName) then -- Use generalized mobIsPresent
                         appeared = true
-                        print("[AutoNextDungeon] " .. targetMobDescription .. " appeared: " .. targetMobName)
+                        print("[AutoNextDungeon] " .. targetMobDescription .. " appeared.")
                         break
                     end
                     task.wait(1)
@@ -1180,8 +1159,8 @@ task.spawn(function()
                 if appeared then
                     print("[AutoNextDungeon] Waiting for " .. targetMobDescription .. " to be defeated...")
                     for i = 1, 60 do -- 1 minute for target mob to be defeated
-                        if not bossInMobs(targetMobName) then
-                            print("[AutoNextDungeon] " .. targetMobDescription .. " defeated: " .. targetMobName)
+                        if not mobIsPresent(targetMobName) then
+                            print("[AutoNextDungeon] " .. targetMobDescription .. " defeated.")
                             break
                         end
                         task.wait(1)
@@ -1191,7 +1170,7 @@ task.spawn(function()
                     print("[AutoNextDungeon] " .. targetMobDescription .. " did not appear in mobs in time or was already defeated.")
                 end
             else
-                print("[AutoNextDungeon] No target mob (" .. targetMobDescription .. ") found to track. Proceeding without specific mob defeat check.")
+                print("[AutoNextDungeon] No specific target mob (" .. targetMobDescription .. ") found to track. Proceeding without specific mob defeat check.")
             end
 
 
@@ -1438,20 +1417,6 @@ local normalDungeonName = config.normalDungeonName
 local normalDungeonPlayerLimit = config.normalDungeonPlayerLimit
 local normalDungeonDifficulty = config.normalDungeonDifficulty
 
--- Dungeon sequence (same as before)
-local dungeonSequence = {
-    {name = "ForestDungeon", difficulty = 1}, {name = "ForestDungeon", difficulty = 2}, {name = "ForestDungeon", difficulty = 3}, {name = "ForestDungeon", difficulty = 4},
-    {name = "MountainDungeon", difficulty = 1}, {name = "MountainDungeon", difficulty = 2}, {name = "MountainDungeon", difficulty = 3}, {name = "MountainDungeon", difficulty = 4},
-    {name = "CoveDungeon", difficulty = 1}, {name = "CoveDungeon", difficulty = 2}, {name = "CoveDungeon", difficulty = 3}, {name = "CoveDungeon", difficulty = 4},
-    {name = "CastleDungeon", difficulty = 1}, {name = "CastleDungeon", difficulty = 2}, {name = "CastleDungeon", difficulty = 3}, {name = "CastleDungeon", difficulty = 4},
-    {name = "JungleDungeon", difficulty = 1}, {name = "JungleDungeon", difficulty = 2}, {name = "JungleDungeon", difficulty = 3}, {name = "JungleDungeon", difficulty = 4},
-    {name = "AstralDungeon", difficulty = 1}, {name = "AstralDungeon", difficulty = 2}, {name = "AstralDungeon", difficulty = 3}, {name = "AstralDungeon", difficulty = 4},
-    {name = "DesertDungeon", difficulty = 1}, {name = "DesertDungeon", difficulty = 2}, {name = "DesertDungeon", difficulty = 3}, {name = "DesertDungeon", difficulty = 4},
-    {name = "CaveDungeon", difficulty = 1}, {name = "CaveDungeon", difficulty = 2}, {name = "CaveDungeon", difficulty = 3}, {name = "CaveDungeon", difficulty = 4},
-    {name = "MushroomDungeon", difficulty = 1}, {name = "MushroomDungeon", difficulty = 2}, {name = "MushroomDungeon", difficulty = 3}, {name = "MushroomDungeon", difficulty = 4},
-    {name = "GoldDungeon", difficulty = 1}, {name = "GoldDungeon", difficulty = 2}, {name = "GoldDungeon", difficulty = 3}, {name = "GoldDungeon", difficulty = 4},
-}
-
 -- Raid Dungeon variables and UI (initialize from config)
 local raidDungeonName = config.raidDungeonName
 local raidDungeonPlayerLimit = config.raidDungeonPlayerLimit
@@ -1614,7 +1579,7 @@ local function setupUI()
         end
     })
     autoFarmToggleUI:SetValue(config.autoFarmEnabled)
-    
+
     local autoFarmHeightSliderUI = FeaturesBox:AddSlider("AutoFarmHeight", {
         Text = "Auto Farm Height", Min = 10, Max = 80, Default = config.autoFarmHeight, Suffix = " studs", Rounding = 0,
         Tooltip = "How high above the mob to farm",
@@ -1649,7 +1614,7 @@ local function setupUI()
         Callback = function(Value) autoEquipHighestWeapon = Value; config.autoEquipHighestWeapon = Value; saveConfig(); print("Auto Equip Highest Equipment: " .. (Value and "Enabled" or "Disabled")) end
     })
     autoEquipHighestWeaponToggleUI:SetValue(config.autoEquipHighestWeapon)
-    
+
     local autoSellToggleUI = FeaturesBox:AddToggle("AutoSell", {
         Text = "Auto Sell", Default = config.autoSellEnabled,
         Tooltip = "Automatically sells items of selected rarity and below (except skills)",
@@ -1703,7 +1668,7 @@ local function setupUI()
 
     local miniBossRoomNumberInputUI = NormalDungeonBox:AddInput("MiniBossRoomNumber", {
         Text = "Mini-Boss Room Number", Default = tostring(config.miniBossRoomNumber), Placeholder = "e.g., 6",
-        Tooltip = "The room number where the mini-boss is located.",
+        Tooltip = "The room number where the mini-boss is located. Used as a fallback if no specific mini-boss name is hardcoded for the dungeon.",
         Callback = function(Value)
             local num = tonumber(Value)
             if num and num > 0 then miniBossRoomNumber = num; config.miniBossRoomNumber = num; saveConfig(); print("Mini-Boss Room Number set to: " .. num)
@@ -1912,14 +1877,8 @@ local function setupUI()
                 RuntimeState.autoSkillEnabled = false
                 RuntimeState.skillToggles = {}
             end
-            autoFarmEnabled = false
-            autoStartDungeon = false
-            autoReplyDungeon = false
-            autoNextDungeon = false
-            autoClaimDailyQuest = false
-            autoEquipHighestWeapon = false
-            autoResetOnMiniBoss = false
-            autoSellEnabled = false
+            autoFarmEnabled = false; autoStartDungeon = false; autoReplyDungeon = false; autoNextDungeon = false;
+            autoClaimDailyQuest = false; autoEquipHighestWeapon = false; autoResetOnMiniBoss = false; autoSellEnabled = false;
 
             -- Attempt to destroy any leftover BodyVelocity
             pcall(function()
@@ -1952,7 +1911,3 @@ end
 setupUI()
 
 print("Dungeon Heroes Script Loaded Successfully with Obsidian UI!")
-
--- //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
--- ///////////////////////////////// END DUNGEON HEROES SCRIPT LOGIC ////////////////////////////////////////////////
--- //////////////////////////////////////////////////////////////////////////////////////////////////////////////////

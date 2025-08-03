@@ -1574,10 +1574,12 @@ local RaidDungeonBox = DungeonTab:AddRightGroupbox("Raid Dungeon")
 local EventDungeonBox = DungeonTab:AddLeftGroupbox("Event Dungeon")
 local SettingsTabbox = SettingsTab:AddLeftTabbox("Settings") -- Obsidian uses Tabbox for nested tabs
 local ThemeTab = SettingsTabbox:AddTab("Theme") -- Tab inside Tabbox
+local DebugTab = SettingsTabbox:AddTab("Debug") -- Debug tab for mob tracking
 
 local AldrazirStatusLabel = nil -- New global label for debug output
 local aldrazirFound = false
 local aldrazirIsAlive = false
+local previousAldrazirAlive = false -- Track previous state to detect changes
 
 -- Update Aldrazir status for debug display
 task.spawn(function()
@@ -1588,28 +1590,70 @@ task.spawn(function()
             local aldrazir = mobs:FindFirstChild("Aldrazir")
             aldrazirFound = aldrazir ~= nil
             if aldrazir then
-                aldrazirIsAlive = isTargetMobAlive("Aldrazir", true)
-                -- Debug print when Aldrazir is found
-                if not aldrazirFound or aldrazirIsAlive ~= aldrazirFound then
-                    print("[DEBUG] Aldrazir found:", aldrazirFound, "alive:", aldrazirIsAlive)
+                local currentlyAlive = isTargetMobAlive("Aldrazir", true)
+                
+                -- Check if Aldrazir just died (was alive, now dead) and auto-reset is enabled
+                if autoResetOnMiniBoss and previousAldrazirAlive and not currentlyAlive and autoNextDungeon then
+                    print("[AUTO-RESET] Aldrazir defeated! Starting next dungeon...")
+                    task.wait(math.random(2, 4)) -- Wait a bit like the normal auto-dungeon logic
+                    
+                    -- Find current dungeon in sequence and start next one
+                    local currentDungeonCode = normalDungeonNameMap[normalDungeonName] or normalDungeonName
+                    local currentDifficulty = ({Normal=1, Medium=2, Hard=3, Insane=4, Extreme=5})[normalDungeonDifficulty] or 1
+                    
+                    -- Start the same dungeon again (or you could modify this to go to next in sequence)
+                    local args = {
+                        [1] = currentDungeonCode,
+                        [2] = currentDifficulty,
+                        [3] = normalDungeonPlayerLimit
+                    }
+                    
+                    local success, err = pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("Systems"):WaitForChild("Parties"):WaitForChild("SetSettings"):FireServer(unpack(args))
+                    end)
+                    
+                    if success then
+                        print("[AUTO-RESET] Successfully started new dungeon after Aldrazir defeat")
+                    else
+                        warn("[AUTO-RESET] Error starting new dungeon:", err)
+                    end
                 end
+                
+                previousAldrazirAlive = currentlyAlive
+                aldrazirIsAlive = currentlyAlive
             else
+                -- If Aldrazir was alive but now the mob is gone, trigger reset
+                if autoResetOnMiniBoss and previousAldrazirAlive and autoNextDungeon then
+                    print("[AUTO-RESET] Aldrazir disappeared (defeated)! Starting next dungeon...")
+                    task.wait(math.random(2, 4))
+                    
+                    local currentDungeonCode = normalDungeonNameMap[normalDungeonName] or normalDungeonName
+                    local currentDifficulty = ({Normal=1, Medium=2, Hard=3, Insane=4, Extreme=5})[normalDungeonDifficulty] or 1
+                    
+                    local args = {
+                        [1] = currentDungeonCode,
+                        [2] = currentDifficulty,
+                        [3] = normalDungeonPlayerLimit
+                    }
+                    
+                    local success, err = pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("Systems"):WaitForChild("Parties"):WaitForChild("SetSettings"):FireServer(unpack(args))
+                    end)
+                    
+                    if success then
+                        print("[AUTO-RESET] Successfully started new dungeon after Aldrazir disappeared")
+                    else
+                        warn("[AUTO-RESET] Error starting new dungeon:", err)
+                    end
+                end
+                
+                previousAldrazirAlive = false
                 aldrazirIsAlive = false
-            end
-            
-            -- Debug: Print all mobs in the Mobs folder
-            if aldrazirFound == false then
-                local mobNames = {}
-                for _, mob in ipairs(mobs:GetChildren()) do
-                    table.insert(mobNames, mob.Name)
-                end
-                if #mobNames > 0 then
-                    print("[DEBUG] Current mobs in workspace.Mobs:", table.concat(mobNames, ", "))
-                end
             end
         else
             aldrazirFound = false
             aldrazirIsAlive = false
+            previousAldrazirAlive = false
         end
         task.wait(1)
     end
@@ -1982,6 +2026,55 @@ local function setupUI()
 
     -- This line was from the basic UI version, not needed for Obsidian.
     -- ThemeTab:AddLabel("Press Right-Ctrl to toggle the UI")
+    
+    -- Debug Tab - Add mob tracking
+    local mobListLabel = DebugTab:AddLabel("MobList", "Loading mob list...", true)
+    local aldrazirDebugLabel = DebugTab:AddLabel("AldrazirDebug", "Aldrazir Debug Info", true)
+    
+    -- Update mob list every 2 seconds
+    task.spawn(function()
+        while true do
+            local mobs = workspace:FindFirstChild("Mobs")
+            local mobText = "Current Mobs in workspace.Mobs:\n"
+            
+            if mobs then
+                local mobNames = {}
+                for _, mob in ipairs(mobs:GetChildren()) do
+                    if mob:IsA("Model") then
+                        -- Check if it has BOSS folder for mini-boss identification
+                        local isBoss = mob:FindFirstChild("BOSS") and " [BOSS]" or ""
+                        -- Check health status
+                        local healthStatus = ""
+                        if isTargetMobAlive(mob.Name, false) then
+                            healthStatus = " (Alive)"
+                        else
+                            healthStatus = " (Dead/No Health)"
+                        end
+                        table.insert(mobNames, mob.Name .. isBoss .. healthStatus)
+                    end
+                end
+                
+                if #mobNames > 0 then
+                    mobText = mobText .. table.concat(mobNames, "\n")
+                else
+                    mobText = mobText .. "No mobs found"
+                end
+            else
+                mobText = mobText .. "Mobs folder not found"
+            end
+            
+            -- Update debug info for Aldrazir specifically
+            local aldrazirText = string.format("Aldrazir Status:\nFound: %s\nAlive: %s\nAuto Reset Enabled: %s", 
+                tostring(aldrazirFound), 
+                tostring(aldrazirIsAlive),
+                tostring(autoResetOnMiniBoss))
+            
+            if mobListLabel then mobListLabel:SetText(mobText) end
+            if aldrazirDebugLabel then aldrazirDebugLabel:SetText(aldrazirText) end
+            
+            task.wait(2)
+        end
+    end)
 end
 
 -- Initialize UI elements and connect them to logic
